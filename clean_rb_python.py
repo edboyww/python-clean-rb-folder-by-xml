@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List
 from urllib.parse import unquote
 
-print(__name__)
+# Parse the command line arguments
 
 parser = argparse.ArgumentParser(
     prog="clean_rb_python",
@@ -56,6 +56,7 @@ parser.add_argument("--version", action="version", version="%(prog)s 0.9")
 args = parser.parse_args()
 
 
+# Function to determine if a path should be skipped based on the skip list and the include_streaming flag
 def should_skip_path(path: str):
     skips: List[str] = []
     if not args.include_streaming:
@@ -65,14 +66,15 @@ def should_skip_path(path: str):
         skips.append("itunes")
     if args.skip:
         for s in args.skip.split(","):
-            skips.append(s)
+            skips.append(s.lower())
     if skips:
         for s in skips:
-            if s in path:
+            if s in path.lower():
                 return True
     return False
 
 
+# Function to get the list of paths from the Rekordbox XML file
 def get_path_list_from_rekordbox_xml():
     try:
         with open(args.rekordbox_xml, "r", encoding="utf-8") as rxml:
@@ -99,6 +101,7 @@ def get_path_list_from_rekordbox_xml():
     return xml_paths
 
 
+# Function to determine the common path in a list of paths
 def determine_common_path(paths: List[str]):
     common_path: str = ""
     for path in paths:
@@ -112,13 +115,10 @@ def determine_common_path(paths: List[str]):
     return common_path
 
 
-def should_delete_file(file_path: Path, xml_paths: List[str]):
-    return str(file_path.resolve()) not in xml_paths
-
-
 # The main code starts here
 # -------------------------
 
+# Get the paths from the XML file and determine the root path for the cleaning process
 
 xml_paths = get_path_list_from_rekordbox_xml()
 
@@ -148,6 +148,7 @@ if inp == "n":
     common_path = input_path
 inp = ""
 
+# Message before starting the cleaning process, and determine the file postfix for the results file
 
 print(
     f"\nStarting to {"clean" if args.clean else "simulate cleaning"} from folder {common_path}"
@@ -156,8 +157,10 @@ file_postfix = ""
 if args.results_file:
     file_postfix = datetime.now().strftime("%Y%m%d_%H%M%S")
     print(
-        f"\nThe results will be written to the following file: {'clean' if args.clean else 'simulate'}_results_{file_postfix}.txt"
+        f"The results will be written to the following file: {'clean' if args.clean else 'simulate'}_results_{file_postfix}.txt"
     )
+
+# Ask for confirmation before actually deleting files
 
 if args.clean:
     print(
@@ -174,49 +177,59 @@ if args.clean:
         print("\nOk, bye!")
         exit(0)
 
-details = ""
-details += (
+
+# Start the cleaning process
+
+deleted_files = 0
+deleted_details = (
     "\nDeleted files:\n--------------\n"
     if args.clean
     else "\nFiles to be deleted:\n--------------------\n"
 )
-
-deleted_files = 0
 skipped_files = 0
+skipped_details = "\nSkipped files:\n--------------\n"
 for path in Path(common_path).rglob("*"):
     if path.is_file():
         resolved_entry = f"{path.resolve()}"
-        if should_delete_file(path, xml_paths):
-            operation = "D"
-            if args.clean:
-                try:
-                    path.unlink()
-                    deleted_files += 1
-                except FileNotFoundError:
-                    skipped_files += 1
-                    operation = "S"
-        else:
+        if should_skip_path(resolved_entry):
             skipped_files += 1
-            operation = "S"
-        details += f"\n{operation}: {resolved_entry}"
+            skipped_details += f"\nS: {resolved_entry.replace(common_path, '')}"
+        elif resolved_entry.lower() not in xml_paths:
+            deleted_files += 1
+            deleted_details += f"\nD: {resolved_entry.replace(common_path, '')}"
+            if args.clean:
+                path.unlink()
+
 
 results = f"\nSUMMARY:\n========\nDeleted files: {deleted_files}\nSkipped files: {skipped_files}\n"
 
+# Check if there are paths in the XML file that are not found
+
 xml_paths_not_found: List[str] = []
+xml_paths_not_found_details = (
+    "\nPaths in the XML file not found:\n---------------------------------\n"
+)
 for xml_path in xml_paths:
     if not os.path.exists(xml_path):
         xml_paths_not_found.append(xml_path)
 if len(xml_paths_not_found) > 0:
-    details += (
-        "\n\nPaths in the XML file not found:\n--------------------------------\n"
-    )
     for notfound in xml_paths_not_found:
-        details += f"\nX: {notfound}"
-results += f"Paths in the XML file not found: {len(xml_paths_not_found)}\n"
+        xml_paths_not_found_details += f"\nX: {notfound}"
+
+# Show the summary
 
 print(results)
 
+# Print the details if requested
+
 if args.details or args.results_file:
+    details = ""
+    if deleted_files:
+        details += deleted_details
+    if skipped_files:
+        details += skipped_details
+    if xml_paths_not_found:
+        details += xml_paths_not_found_details
     if args.details:
         print(details)
     if args.results_file:
