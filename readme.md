@@ -1,10 +1,7 @@
-Deletes files from your Rekordbox folder which are not in the library based on an
-exported Rekordbox XML.
+Deletes files from your Rekordbox folder which are not in the library based on an exported Rekordbox XML.
 
 **Usage:**  
-***clean_rb_python [-h] [-c] [-s] [--skip SKIP] [--include-streaming] [--details]
-                       [--results-file] [--version]
-                       rekordbox_xml***
+***clean_rb_python** [-h] [-c] [-s] [--skip SKIP] [--include-streaming] [--details] [--results-file] [--version] **rekordbox_xml***
 
 **Positional arguments:**  
 *rekordbox_xml*  
