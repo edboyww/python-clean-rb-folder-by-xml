@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import List
+from urllib.parse import unquote
+
+print(__name__)
 
 parser = argparse.ArgumentParser(
     prog="clean_rb_python",
@@ -75,7 +78,7 @@ def get_path_list_from_rekordbox_xml():
         with open(args.rekordbox_xml, "r", encoding="utf-8") as rxml:
             xml_tree = ET.parse(rxml)
     except FileNotFoundError:
-        print("File not found")
+        print("XML file not found")
         exit(1)
     except ET.ParseError:
         print("Invalid XML file")
@@ -90,7 +93,7 @@ def get_path_list_from_rekordbox_xml():
         location = track.get("Location")
         if location and not should_skip_path(location):
             xml_paths.append(
-                location.replace("file://localhost/", "").replace("/", os.sep)
+                unquote(location.replace("file://localhost/", "").replace("/", os.sep))
             )
 
     return xml_paths
@@ -182,18 +185,20 @@ deleted_files = 0
 skipped_files = 0
 for path in Path(common_path).rglob("*"):
     if path.is_file():
+        resolved_entry = f"{path.resolve()}"
         if should_delete_file(path, xml_paths):
-            details += f"\n{path.resolve()}"
+            operation = "D"
             if args.clean:
                 try:
                     path.unlink()
                     deleted_files += 1
                 except FileNotFoundError:
                     skipped_files += 1
-                    details += " (skipped)"
+                    operation = "S"
         else:
             skipped_files += 1
-            details += f"\n{path.resolve()} (skipped)"
+            operation = "S"
+        details += f"\n{operation}: {resolved_entry}"
 
 results = f"\nSUMMARY:\n========\nDeleted files: {deleted_files}\nSkipped files: {skipped_files}\n"
 
@@ -206,7 +211,7 @@ if len(xml_paths_not_found) > 0:
         "\n\nPaths in the XML file not found:\n--------------------------------\n"
     )
     for notfound in xml_paths_not_found:
-        details += f"\n{notfound}"
+        details += f"\nX: {notfound}"
 results += f"Paths in the XML file not found: {len(xml_paths_not_found)}\n"
 
 print(results)
