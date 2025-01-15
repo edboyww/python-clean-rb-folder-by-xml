@@ -10,8 +10,9 @@ Deletes files from your Rekordbox folder which are not in the library based on a
   `-h, --help` - show this help message and exit  
   `-c, --clean` - do the cleaning  
   `-s, --simulate` - simulate the cleaning to see what would be deleted (default behaviour)  
+  `-f, --folder` - the folder to clean. If it is not given, the user will be able to set the common folder based on the XML
   `--skip SKIP` - skip the cleaning for these strings in the paths, divided by ',' (applies to both the local files and the paths in the XML file)
   `--details` - show the detailed results (per file) on console  
   `--details-file` - write the deatiled results to a text file: either `clean_details_<datetime>.txt` or `simulate_details_<datetime>.txt`  
   `--check-xml` - check if the XML has any URLs which does not exist in the filesystem
-  `--version` - show program's version number and exit
+  `-v, --version` - show program's version number and exit

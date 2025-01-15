@@ -32,7 +32,15 @@ parser.add_argument(
     default=True,
 )
 parser.add_argument(
-    "--skip-folder",
+    "-f",
+    "--f",
+    type=str,
+    action="store",
+    default=None,
+    help="the folder to clean. If it is not given, the user will be able to set the common folder based on the XML",
+)
+parser.add_argument(
+    "--skip",
     type=str,
     action="store",
     default=None,
@@ -56,7 +64,7 @@ parser.add_argument(
     help="check if the XML has any URLs which does not exist in the filesystem",
     default=False,
 )
-parser.add_argument("--version", action="version", version="%(prog)s 1.1")
+parser.add_argument("-v", "--version", action="version", version="%(prog)s 1.1")
 args = parser.parse_args()
 
 SEP = os.path.sep
@@ -78,9 +86,9 @@ def should_skip_path(input_arg: Path | str):
         return True
 
     # Check folder
-    if args.skip_folder:
+    if args.skip:
         skip_folders: List[str] = []
-        for s in args.skip_folder.split(","):
+        for s in args.skip.split(","):
             skip_folders.append(s.lower())
         for skip in skip_folders:
             if skip in parent_str.lower():
@@ -165,36 +173,53 @@ def autocomplete_dict(path: Path) -> None | AutocompleteDict:
 
 # Get the paths from the XML file and determine the root path for the cleaning process
 xml_paths = get_path_list_from_rekordbox_xml()
-initial_common_path = determine_common_path(xml_paths)
-try:
-    autocomplete_data = autocomplete_dict(Path(initial_common_path))
-except PermissionError:
-    print("ERROR: No permission to process common path in XML")
-    exit(1)
-common_path = initial_common_path
-if autocomplete_data is not None:
-    print(
-        "\nSet the folder you want to clean starting with the common folder for all the files in the XML file. Press TAB to see the folders on a current level and SPACE to get to the next level. You can set the path by pressing ENTER.\n"
-    )
-    completer = NestedCompleter.from_nested_dict((autocomplete_data))
+common_path = ""
 
-    while True:
-        print("SELECT THE PATH:")
-        input_raw = prompt(initial_common_path, completer=completer)
-        input_path = input_raw.strip().replace(" ", "")
-        common_path = initial_common_path + input_path
-        if not os.path.exists(common_path):
-            print("The path does not exist. Please enter a valid path.\n")
-            continue
-        print(
-            f"\nThe selected path is\n{common_path}\nIS THE PATH OKAY? (Y)es / (N)o:",
-            end=" ",
-        )
-        inp = input().lower()
-        if inp not in ("y", "n"):
-            print("Please enter 'Y' or 'N' to answer the question:", end=" ")
-        elif inp == "y":
+if args.f:
+    if not os.path.exists(args.f):
+        print("Error: The given path does not exist. Please enter a valid path.\n")
+        exit(1)
+    in_xml = False
+    for p in xml_paths:
+        if args.f in p:
+            common_path = args.f
+            in_xml = True
             break
+    if not in_xml:
+        print("Error: There are no files for the given path in the XML.\n")
+        exit(1)
+
+if common_path == "":
+    initial_common_path = determine_common_path(xml_paths)
+    try:
+        autocomplete_data = autocomplete_dict(Path(initial_common_path))
+    except PermissionError:
+        print("ERROR: No permission to process common path in XML")
+        exit(1)
+    common_path = initial_common_path
+    if autocomplete_data is not None:
+        print(
+            "\nSet the folder you want to clean starting with the common folder for all the files in the XML file. Press TAB to see the folders on a current level and SPACE to get to the next level. You can set the path by pressing ENTER.\n"
+        )
+        completer = NestedCompleter.from_nested_dict((autocomplete_data))
+
+        while True:
+            print("SELECT THE PATH:")
+            input_raw = prompt(initial_common_path, completer=completer)
+            input_path = input_raw.strip().replace(" ", "")
+            common_path = initial_common_path + input_path
+            if not os.path.exists(common_path):
+                print("The path does not exist. Please enter a valid path.\n")
+                continue
+            print(
+                f"\nThe selected path is\n{common_path}\nIS THE PATH OKAY? (Y)es / (N)o:",
+                end=" ",
+            )
+            inp = input().lower()
+            if inp not in ("y", "n"):
+                print("Please enter 'Y' or 'N' to answer the question:", end=" ")
+            elif inp == "y":
+                break
 
 # Message before starting the cleaning process, and determine the file postfix for the details file
 print(
