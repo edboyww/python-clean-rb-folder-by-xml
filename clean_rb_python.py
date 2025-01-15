@@ -39,12 +39,6 @@ parser.add_argument(
     help="skip the cleaning for these strings in the folder paths, divided by ',' (applies to both the local files and the paths in the XML file)",
 )
 parser.add_argument(
-    "--include-streaming",
-    action="store_true",
-    help="include stored streaming service file urls to the cleaning process (they are skipped by adding 'tidal', 'soundcloud', 'beatport', 'itunes' to the skip list by default)",
-    default=False,
-)
-parser.add_argument(
     "--details",
     action="store_true",
     help="show the detailed results (per file) on console instead of a summary",
@@ -56,7 +50,13 @@ parser.add_argument(
     help="write the deatiled results to a text file: either clean_results_<datetime>.txt or simulate_results_<datetime>.txt",
     default=False,
 )
-parser.add_argument("--version", action="version", version="%(prog)s 0.9")
+parser.add_argument(
+    "--check-xml",
+    action="store_true",
+    help="check if the XML has any URLs which does not exist in the filesystem",
+    default=False,
+)
+parser.add_argument("--version", action="version", version="%(prog)s 1.1")
 args = parser.parse_args()
 
 SEP = os.path.sep
@@ -65,8 +65,6 @@ SEP = os.path.sep
 # Function to determine if a path should be skipped based on the skip list and the include_streaming flag
 def should_skip_path(input_arg: Path | str):
     parent_str = ""
-    file_str = ""
-
     input_path = None
     if type(input_arg) is str:
         input_path = Path(input_arg)
@@ -74,19 +72,10 @@ def should_skip_path(input_arg: Path | str):
         input_path = input_arg
     else:
         return True
-
     if input_path:
         parent_str = f"{input_path.parent}"
-        file_str = f"{input_path.name}"
     else:
         return True
-
-    # Check streaming
-    if not args.include_streaming:
-        skip_streaming = ["tidal", "soundcloud", "beatport", "itunes"]
-        for skip in skip_streaming:
-            if skip in file_str:
-                return True
 
     # Check folder
     if args.skip_folder:
@@ -122,6 +111,15 @@ def get_path_list_from_rekordbox_xml():
         location = track.get("Location")
         if location:
             raw_path = unquote(location.replace("file://localhost/", ""))
+            # skip streaming urls
+            if (
+                raw_path.startswith("tidal:")
+                or raw_path.startswith("soundcloud:")
+                or raw_path.startswith("itunes:")
+                or raw_path.startswith("beatsource:")
+                or raw_path.startswith("beatport:")
+            ):
+                continue
             xml_paths.append(raw_path.replace("/", SEP))
 
     return xml_paths
@@ -200,7 +198,7 @@ if autocomplete_data is not None:
 
 # Message before starting the cleaning process, and determine the file postfix for the details file
 print(
-    f"\nStarting to {"clean" if args.clean else "simulate cleaning"} from folder {common_path}"
+    f"\nStarting to {'clean' if args.clean else 'simulate cleaning'} from folder {common_path}"
 )
 file_postfix = ""
 if args.details_file:
@@ -249,21 +247,21 @@ for path in Path(common_path).rglob("*"):
             if args.clean:
                 path.unlink()  # THIS LINE DELETES THE FILE!
 
-results = f"\nSUMMARY:\n========\nDeleted files: {deleted_files}\nSkipped files: {skipped_files}\n"
+results = f"\nSUMMARY:\n========\n{'Deleted files' if args.clean else 'Files to be deleted'}: {deleted_files}\nSkipped files: {skipped_files}\n"
 
-# Check if there are paths in the XML file that are not found
-
+# Check if there are paths in the XML file that are not found (given the argument)
 xml_paths_not_found: List[str] = []
 xml_paths_not_found_details = ""
-for xml_path in xml_paths:
-    if not os.path.exists(xml_path):
-        xml_paths_not_found.append(xml_path)
-if len(xml_paths_not_found) > 0:
-    results += f"Paths in XML not found: {len(xml_paths_not_found)}"
-    if args.details or args.details_file:
-        xml_paths_not_found_details += "\n\n\nPaths in the XML file not found:\n---------------------------------\n"
-        for notfound in xml_paths_not_found:
-            xml_paths_not_found_details += f"\nX: {notfound}"
+if args.check_xml:
+    for xml_path in xml_paths:
+        if not os.path.exists(xml_path):
+            xml_paths_not_found.append(xml_path)
+    if len(xml_paths_not_found) > 0:
+        results += f"Paths in XML not found: {len(xml_paths_not_found)}"
+        if args.details or args.details_file:
+            xml_paths_not_found_details += "\n\n\nPaths in the XML file not found:\n---------------------------------\n"
+            for notfound in xml_paths_not_found:
+                xml_paths_not_found_details += f"\nX: {notfound}"
 
 # Show the summary
 
@@ -277,7 +275,7 @@ if args.details or args.details_file:
         details += deleted_details
     if skipped_files:
         details += skipped_details
-    if xml_paths_not_found:
+    if args.check_xml and xml_paths_not_found:
         details += xml_paths_not_found_details
     if args.details:
         print(details)
